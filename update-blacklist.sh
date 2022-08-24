@@ -1,23 +1,24 @@
 #!/usr/bin/env bash
 #
 # usage update-blacklist.sh <configuration file>
-# eg: update-blacklist.sh /etc/ipset-blacklist/ipset-blacklist.conf
+# eg: update-blacklist.sh /etc/nft-blacklist/nft-blacklist.conf
 #
+
 function exists() { command -v "$1" >/dev/null 2>&1 ; }
 
 if [[ -z "$1" ]]; then
-  echo "Error: please specify a configuration file, e.g. $0 /etc/ipset-blacklist/ipset-blacklist.conf"
+  echo "Error: please specify a configuration file, e.g. $0 /etc/nft-blacklist/nft-blacklist.conf"
   exit 1
 fi
 
-# shellcheck source=ipset-blacklist.conf
+# shellcheck source=nft-blacklist.conf
 if ! source "$1"; then
   echo "Error: can't load configuration file $1"
   exit 1
 fi
 
-if ! exists curl && exists egrep && exists grep && exists ipset && exists iptables && exists sed && exists sort && exists wc ; then
-  echo >&2 "Error: searching PATH fails to find executables among: curl egrep grep ipset iptables sed sort wc"
+if ! exists curl && exists egrep && exists grep && exists nft && exists sed && exists sort && exists wc ; then
+  echo >&2 "Error: searching PATH fails to find executables among: curl egrep grep nft sed sort wc"
   exit 1
 fi
 
@@ -29,33 +30,6 @@ fi
 if [[ ! -d $(dirname "$IP_BLACKLIST") || ! -d $(dirname "$IP_BLACKLIST_RESTORE") ]]; then
   echo >&2 "Error: missing directory(s): $(dirname "$IP_BLACKLIST" "$IP_BLACKLIST_RESTORE"|sort -u)"
   exit 1
-fi
-
-# create the ipset if needed (or abort if does not exists and FORCE=no)
-if ! ipset list -n|command grep -q "$IPSET_BLACKLIST_NAME"; then
-  if [[ ${FORCE:-no} != yes ]]; then
-    echo >&2 "Error: ipset does not exist yet, add it using:"
-    echo >&2 "# ipset create $IPSET_BLACKLIST_NAME -exist hash:net family inet hashsize ${HASHSIZE:-16384} maxelem ${MAXELEM:-65536}"
-    exit 1
-  fi
-  if ! ipset create "$IPSET_BLACKLIST_NAME" -exist hash:net family inet hashsize "${HASHSIZE:-16384}" maxelem "${MAXELEM:-65536}"; then
-    echo >&2 "Error: while creating the initial ipset"
-    exit 1
-  fi
-fi
-
-# create the iptables binding if needed (or abort if does not exists and FORCE=no)
-if ! iptables -nvL INPUT|command grep -q "match-set $IPSET_BLACKLIST_NAME"; then
-  # we may also have assumed that INPUT rule n°1 is about packets statistics (traffic monitoring)
-  if [[ ${FORCE:-no} != yes ]]; then
-    echo >&2 "Error: iptables does not have the needed ipset INPUT rule, add it using:"
-    echo >&2 "# iptables -I INPUT ${IPTABLES_IPSET_RULE_NUMBER:-1} -m set --match-set $IPSET_BLACKLIST_NAME src -j DROP"
-    exit 1
-  fi
-  if ! iptables -I INPUT "${IPTABLES_IPSET_RULE_NUMBER:-1}" -m set --match-set "$IPSET_BLACKLIST_NAME" src -j DROP; then
-    echo >&2 "Error: while adding the --match-set ipset rule to iptables"
-    exit 1
-  fi
 fi
 
 IP_BLACKLIST_TMP=$(mktemp)
@@ -82,32 +56,37 @@ if [[ ${DO_OPTIMIZE_CIDR} == yes ]]; then
   fi
   < "$IP_BLACKLIST" iprange --optimize - > "$IP_BLACKLIST_TMP" 2>/dev/null
   if [[ ${VERBOSE:-no} == yes ]]; then
-    echo "Addresses after CIDR optimization:  $(wc -l "$IP_BLACKLIST_TMP" | cut -d' ' -f1)"
+    echo "Addresses after CIDR optimization: $(wc -l "$IP_BLACKLIST_TMP" | cut -d' ' -f1)"
   fi
   cp "$IP_BLACKLIST_TMP" "$IP_BLACKLIST"
 fi
 
 rm -f "$IP_BLACKLIST_TMP"
 
-# family = inet for IPv4 only
+# family = inet for IPv4/IPv6
 cat >| "$IP_BLACKLIST_RESTORE" <<EOF
-create $IPSET_TMP_BLACKLIST_NAME -exist hash:net family inet hashsize ${HASHSIZE:-16384} maxelem ${MAXELEM:-65536}
-create $IPSET_BLACKLIST_NAME -exist hash:net family inet hashsize ${HASHSIZE:-16384} maxelem ${MAXELEM:-65536}
+add table $TABLE
+add counter $TABLE $SET_NAME
+add chain $TABLE input { type filter hook input priority filter - 1; policy accept; }
+flush chain $TABLE input
+add set $TABLE $SET_NAME { type ipv4_addr; size ${SET_SIZE:-65536}; flags interval; }
+flush set $TABLE $SET_NAME
+add rule $TABLE input ip saddr @$SET_NAME counter name $SET_NAME drop
+add element $TABLE $SET_NAME {
 EOF
 
 # can be IPv4 including netmask notation
-# IPv6 ? -e "s/^([0-9a-f:./]+).*/add $IPSET_TMP_BLACKLIST_NAME \1/p" \ IPv6
+# IPv6 ? -e "s/^([0-9a-f:./]+).*/  \1,/p" \ IPv6
 sed -rn -e '/^#|^$/d' \
-  -e "s/^([0-9./]+).*/add $IPSET_TMP_BLACKLIST_NAME \\1/p" "$IP_BLACKLIST" >> "$IP_BLACKLIST_RESTORE"
+  -e "s/^([0-9./]+).*/  \\1,/p" "$IP_BLACKLIST" >> "$IP_BLACKLIST_RESTORE"
 
 cat >> "$IP_BLACKLIST_RESTORE" <<EOF
-swap $IPSET_BLACKLIST_NAME $IPSET_TMP_BLACKLIST_NAME
-destroy $IPSET_TMP_BLACKLIST_NAME
+}
 EOF
 
-ipset -file  "$IP_BLACKLIST_RESTORE" restore
+nft -f "$IP_BLACKLIST_RESTORE"
 
 if [[ ${VERBOSE:-no} == yes ]]; then
   echo
-  echo "Blacklisted addresses found: $(wc -l "$IP_BLACKLIST" | cut -d' ' -f1)"
+  echo "Number of blacklisted IP/networks found: $(wc -l "$IP_BLACKLIST" | cut -d' ' -f1)"
 fi
