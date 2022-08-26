@@ -100,7 +100,9 @@ add table inet $TABLE
 add counter inet $TABLE $SET_NAME_V4
 add counter inet $TABLE $SET_NAME_V6
 add set inet $TABLE $SET_NAME_V4 { type ipv4_addr; size ${SET_SIZE:-65536}; flags interval; }
+flush set inet $TABLE $SET_NAME_V4
 add set inet $TABLE $SET_NAME_V6 { type ipv6_addr; size ${SET_SIZE:-65536}; flags interval; }
+flush set inet $TABLE $SET_NAME_V6
 add chain inet $TABLE input { type filter hook input priority filter - 1; policy accept; }
 flush chain inet $TABLE input
 add rule inet $TABLE input meta pkttype { broadcast, multicast } accept
@@ -112,18 +114,16 @@ EOF
 
 if [ -s "$IP_BLACKLIST_FILE" ]; then
   cat >> "$RULESET_FILE" <<EOF
-flush set inet $TABLE $SET_NAME_V4
 add element inet $TABLE $SET_NAME_V4 {
-$(sed -rn -e '/^#|^$|^;/d' -e "s/^([0-9./]+).*/  \\1,/p" "$IP_BLACKLIST_FILE")
+$(sed -rn -e '/^[#$;]/d' -e "s/^([0-9./]+).*/  \\1,/p" "$IP_BLACKLIST_FILE")
 }
 EOF
 fi
 
 if [ -s "$IP6_BLACKLIST_FILE" ]; then
   cat >> "$RULESET_FILE" <<EOF
-flush set inet $TABLE $SET_NAME_V6
 add element inet $TABLE $SET_NAME_V6 {
-$(sed -rn -e '/^#|^$|^;/d' -e "s/^(([a-f0-9:.]+:+[a-f0-9]*)+(\/[0-9]{1,3})?).*/  \\1,/p" "$IP6_BLACKLIST_FILE")
+$(sed -rn -e '/^[#$;]/d' -e "s/^(([0-9a-fA-F:.]+:+[0-9a-fA-F]*)+(\/[0-9]{1,3})?).*/  \\1,/p" "$IP6_BLACKLIST_FILE")
 }
 EOF
 fi
