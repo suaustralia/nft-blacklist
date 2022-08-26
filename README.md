@@ -4,6 +4,7 @@ A Bash shell script which uses nftables sets to ban a large number of IP address
 
 ## What's new
 
+- 08/26/2022: Added experimental IPv6 support and whitelists [@leshniak](https://github.com/leshniak)
 - 08/24/2022: Created this fork and nftables-based version [@leshniak](https://github.com/leshniak)
 - 10/17/2018: Added support for CIDR aggregation if iprange command is available
 - 10/17/2018: Merged Shellcheck PR from [@extremeshok](https://github.com/extremeshok)
@@ -19,11 +20,12 @@ A Bash shell script which uses nftables sets to ban a large number of IP address
 
 1. `wget -O /usr/local/sbin/update-blacklist.sh https://raw.githubusercontent.com/leshniak/nft-blacklist/master/update-blacklist.sh`
 2. `chmod +x /usr/local/sbin/update-blacklist.sh`
-3. `mkdir -p /etc/nft-blacklist ; wget -O /etc/nft-blacklist/nft-blacklist.conf https://raw.githubusercontent.com/leshniak/nft-blacklist/master/nft-blacklist.conf`
-4. Modify `nft-blacklist.conf` according to your needs. Per default, the blacklisted IP addresses will be saved to `/etc/nft-blacklist/ip-blacklist.restore`
-5. `apt-get install nftables iprange`
-6. Create the nftables blacklist (see below). After proper testing, make sure to persist it in your firewall script or similar or the rules will be lost after the next reboot.
-7. Auto-update the blacklist using a cron job
+3. `mkdir -p /etc/nft-blacklist && mkdir -p /var/cache/nft-blacklist ; wget -O /etc/nft-blacklist/nft-blacklist.conf https://raw.githubusercontent.com/leshniak/nft-blacklist/master/nft-blacklist.conf`
+4. Modify `nft-blacklist.conf` according to your needs. Per default, the blacklisted IP addresses will be saved to `/var/cache/nft-blacklist/blacklist.nft`
+5. `apt-get install nftables`
+6. Download `cidr-merger` from https://github.com/zhanhb/cidr-merger/releases
+7. Create the nftables blacklist (see below). After proper testing, make sure to persist it in your firewall script or similar or the rules will be lost after the next reboot.
+8. Auto-update the blacklist using a cron job
 
 ## First run, create the list
 
@@ -37,8 +39,7 @@ to generate the `/etc/nft-blacklist/ip-blacklist.restore`:
 
 ```sh
 # Enable blacklists
-nft -f /etc/nft-blacklist/ip-blacklist.restore
-
+nft -f /var/cache/nft-blacklist/blacklist.nft
 ```
 
 Make sure to run this snippet in a firewall script or just insert it to `/etc/rc.local`.
@@ -50,7 +51,7 @@ In order to auto-update the blacklist, copy the following code into `/etc/cron.d
 ```sh
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 MAILTO=root
-33 23 * * *      root /usr/local/sbin/update-blacklist.sh /etc/nft-blacklist/nft-blacklist.conf
+33 23 * * *      root /usr/local/sbin/update-blacklist.sh /var/cache/nft-blacklist/nft-blacklist.conf
 ```
 
 ## Check for dropped packets
@@ -62,6 +63,12 @@ leshniak@raspberrypi ~> sudo nft list counter inet blackhole blacklist_v4
 table inet blackhole {
         counter blacklist_v4 {
                 packets 52 bytes 2303
+        }
+}
+leshniak@raspberrypi ~> sudo nft list counter inet blackhole blacklist_v6
+table inet blackhole {
+        counter blacklist_v6 {
+                packets 0 bytes 0
         }
 }
 ```
