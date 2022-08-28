@@ -7,9 +7,8 @@
 SET_NAME_PREFIX=blacklist
 SET_NAME_V4="${SET_NAME_PREFIX}_v4"
 SET_NAME_V6="${SET_NAME_PREFIX}_v6"
-IPV4_REGEX="(?:\d{1,3}\.){3}\d{1,3}(?:/\d{1,2})?"
-IPV6_REGEX="(\
-(?:[0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|\
+IPV4_REGEX="(?:[0-9]{1,3}\.){3}[0-9]{1,3}(?:/[0-9]{1,2})?"
+IPV6_REGEX="(?:(?:[0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|\
 (?:[0-9a-fA-F]{1,4}:){1,7}:|\
 (?:[0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|\
 (?:[0-9a-fA-F]{1,4}:){1,5}(?::[0-9a-fA-F]{1,4}){1,2}|\
@@ -18,14 +17,13 @@ IPV6_REGEX="(\
 (?:[0-9a-fA-F]{1,4}:){1,2}(?::[0-9a-fA-F]{1,4}){1,5}|\
 [0-9a-fA-F]{1,4}:(?:(?::[0-9a-fA-F]{1,4}){1,6})|\
 :(?:(?::[0-9a-fA-F]{1,4}){1,7}|:)|\
-::(?:ffff(?::0{1,4}){0,1}:){0,1}\
-(?:(25[0-5]|(?:2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}\
-(?:25[0-5]|(?:2[0-4]|1{0,1}[0-9]){0,1}[0-9])|\
+::(?:[fF]{4}(?::0{1,4})?:)?\
+(?:(25[0-5]|(?:2[0-4]|1?[0-9])?[0-9])\.){3,3}\
+(?:25[0-5]|(?:2[0-4]|1?[0-9])?[0-9])|\
 (?:[0-9a-fA-F]{1,4}:){1,4}:\
-(?:(?:25[0-5]|(?:2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}\
-(?:25[0-5]|(?:2[0-4]|1{0,1}[0-9]){0,1}[0-9])\
-)\
-(?:\/[0-9]{1,3})?"
+(?:(?:25[0-5]|(?:2[0-4]|1?[0-9])?[0-9])\.){3,3}\
+(?:25[0-5]|(?:2[0-4]|1?[0-9])?[0-9]))\
+(?:/[0-9]{1,3})?"
 
 function exists() { command -v "$1" >/dev/null 2>&1 ; }
 function count_entries() { wc -l "$1" | cut -d' ' -f1 ; }
@@ -63,18 +61,18 @@ IP_BLACKLIST_TMP_FILE=$(mktemp)
 IP6_BLACKLIST_TMP_FILE=$(mktemp)
 for i in "${BLACKLISTS[@]}"
 do
-  IP_TMP=$(mktemp)
-  (( HTTP_RC=$(curl -L -A "blacklist-update/script/github" --connect-timeout 10 --max-time 10 -o "$IP_TMP" -s -w "%{http_code}" "$i") ))
+  IP_TMP_FILE=$(mktemp)
+  (( HTTP_RC=$(curl -L -A "nft-blacklist/1.0 (https://github.com/leshniak/nft-blacklist)" --connect-timeout 10 --max-time 10 -o "$IP_TMP_FILE" -s -w "%{http_code}" "$i") ))
   if (( HTTP_RC == 200 || HTTP_RC == 302 || HTTP_RC == 0 )); then # "0" because file:/// returns 000
-    command grep -Po "^$IPV4_REGEX" "$IP_TMP" | sed -r 's/^0*([0-9]+)\.0*([0-9]+)\.0*([0-9]+)\.0*([0-9]+)$/\1.\2.\3.\4/' >> "$IP_BLACKLIST_TMP_FILE"
-    command grep -Po "^$IPV6_REGEX" "$IP_TMP" >> "$IP6_BLACKLIST_TMP_FILE"
+    command grep -Po "^$IPV4_REGEX" "$IP_TMP_FILE" | sed -r 's/^0*([0-9]+)\.0*([0-9]+)\.0*([0-9]+)\.0*([0-9]+)$/\1.\2.\3.\4/' >> "$IP_BLACKLIST_TMP_FILE"
+    command grep -Po "^$IPV6_REGEX" "$IP_TMP_FILE" >> "$IP6_BLACKLIST_TMP_FILE"
     [[ ${VERBOSE:-yes} == yes ]] && echo -n "."
   elif (( HTTP_RC == 503 )); then
     echo -e "\\nUnavailable (${HTTP_RC}): $i"
   else
     echo >&2 -e "\\nWarning: curl returned HTTP response code $HTTP_RC for URL $i"
   fi
-  rm -f "$IP_TMP"
+  rm -f "$IP_TMP_FILE"
 done
 
 # sort -nu does not work as expected
@@ -82,7 +80,7 @@ sed -r -e '/^(0\.0\.0\.0|10\.|127\.|172\.1[6-9]\.|172\.2[0-9]\.|172\.3[0-1]\.|19
 cp "$IP6_BLACKLIST_TMP_FILE" "$IP6_BLACKLIST_FILE"
 if [[ ${DO_OPTIMIZE_CIDR} == yes ]]; then
   if [[ ${VERBOSE:-no} == yes ]]; then
-    echo -e "\\nAddresses before CIDR optimization: $(count_entries "$IP_BLACKLIST_FILE") IPv4, $(count_entries "$IP6_BLACKLIST_FILE") IPv6"
+    echo -e "\\n\\nAddresses before CIDR optimization: $(count_entries "$IP_BLACKLIST_FILE") IPv4, $(count_entries "$IP6_BLACKLIST_FILE") IPv6"
   fi
   cidr-merger "$IP_BLACKLIST_FILE" > "$IP_BLACKLIST_TMP_FILE" 2>/dev/null
   cidr-merger "$IP6_BLACKLIST_FILE" > "$IP6_BLACKLIST_TMP_FILE" 2>/dev/null
@@ -128,9 +126,11 @@ $(sed -rn -e '/^[#$;]/d' -e "s/^(([0-9a-fA-F:.]+:+[0-9a-fA-F]*)+(\/[0-9]{1,3})?)
 EOF
 fi
 
+if [[ ${VERBOSE:-no} == yes ]]; then
+  echo -e "\\nApplying ruleset..."
+fi
 nft -f "$RULESET_FILE"
 
 if [[ ${VERBOSE:-no} == yes ]]; then
-  echo
-  echo "Number of blacklisted IP/networks found: $(count_entries "$IP_BLACKLIST_FILE") IPv4, $(count_entries "$IP6_BLACKLIST_FILE") IPv6"
+  echo -e "\\nNumber of blacklisted IP/networks found: $(count_entries "$IP_BLACKLIST_FILE") IPv4, $(count_entries "$IP6_BLACKLIST_FILE") IPv6"
 fi
