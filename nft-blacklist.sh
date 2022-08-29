@@ -1,26 +1,26 @@
 #!/usr/bin/env bash
 #
-# usage update-blacklist.sh <configuration file>
-# eg: update-blacklist.sh /etc/nft-blacklist/nft-blacklist.conf
+# usage nft-blacklist.sh <configuration file>
+# eg: nft-blacklist.sh /etc/nft-blacklist/nft-blacklist.conf
 #
 
 SET_NAME_PREFIX=blacklist
 SET_NAME_V4="${SET_NAME_PREFIX}_v4"
 SET_NAME_V6="${SET_NAME_PREFIX}_v6"
 IPV4_REGEX="(?:[0-9]{1,3}\.){3}[0-9]{1,3}(?:/[0-9]{1,2})?"
-IPV6_REGEX="(?:(?:[0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|\
-(?:[0-9a-fA-F]{1,4}:){1,7}:|\
-(?:[0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|\
-(?:[0-9a-fA-F]{1,4}:){1,5}(?::[0-9a-fA-F]{1,4}){1,2}|\
-(?:[0-9a-fA-F]{1,4}:){1,4}(?::[0-9a-fA-F]{1,4}){1,3}|\
-(?:[0-9a-fA-F]{1,4}:){1,3}(?::[0-9a-fA-F]{1,4}){1,4}|\
-(?:[0-9a-fA-F]{1,4}:){1,2}(?::[0-9a-fA-F]{1,4}){1,5}|\
-[0-9a-fA-F]{1,4}:(?:(?::[0-9a-fA-F]{1,4}){1,6})|\
-:(?:(?::[0-9a-fA-F]{1,4}){1,7}|:)|\
-::(?:[fF]{4}(?::0{1,4})?:)?\
+IPV6_REGEX="(?:(?:[0-9a-f]{1,4}:){7,7}[0-9a-f]{1,4}|\
+(?:[0-9a-f]{1,4}:){1,7}:|\
+(?:[0-9a-f]{1,4}:){1,6}:[0-9a-f]{1,4}|\
+(?:[0-9a-f]{1,4}:){1,5}(?::[0-9a-f]{1,4}){1,2}|\
+(?:[0-9a-f]{1,4}:){1,4}(?::[0-9a-f]{1,4}){1,3}|\
+(?:[0-9a-f]{1,4}:){1,3}(?::[0-9a-f]{1,4}){1,4}|\
+(?:[0-9a-f]{1,4}:){1,2}(?::[0-9a-f]{1,4}){1,5}|\
+[0-9a-f]{1,4}:(?:(?::[0-9a-f]{1,4}){1,6})|\
+:(?:(?::[0-9a-f]{1,4}){1,7}|:)|\
+::(?:[f]{4}(?::0{1,4})?:)?\
 (?:(25[0-5]|(?:2[0-4]|1?[0-9])?[0-9])\.){3,3}\
 (?:25[0-5]|(?:2[0-4]|1?[0-9])?[0-9])|\
-(?:[0-9a-fA-F]{1,4}:){1,4}:\
+(?:[0-9a-f]{1,4}:){1,4}:\
 (?:(?:25[0-5]|(?:2[0-4]|1?[0-9])?[0-9])\.){3,3}\
 (?:25[0-5]|(?:2[0-4]|1?[0-9])?[0-9]))\
 (?:/[0-9]{1,3})?"
@@ -59,24 +59,24 @@ fi
 
 IP_BLACKLIST_TMP_FILE=$(mktemp)
 IP6_BLACKLIST_TMP_FILE=$(mktemp)
-for i in "${BLACKLISTS[@]}"
+for url in "${BLACKLISTS[@]}"
 do
   IP_TMP_FILE=$(mktemp)
-  (( HTTP_RC=$(curl -L -A "nft-blacklist/1.0 (https://github.com/leshniak/nft-blacklist)" --connect-timeout 10 --max-time 10 -o "$IP_TMP_FILE" -s -w "%{http_code}" "$i") ))
+  (( HTTP_RC=$(curl -L -A "nft-blacklist/1.0 (https://github.com/leshniak/nft-blacklist)" --connect-timeout 10 --max-time 10 -o "$IP_TMP_FILE" -s -w "%{http_code}" "$url") ))
   if (( HTTP_RC == 200 || HTTP_RC == 302 || HTTP_RC == 0 )); then # "0" because file:/// returns 000
     command grep -Po "^$IPV4_REGEX" "$IP_TMP_FILE" | sed -r 's/^0*([0-9]+)\.0*([0-9]+)\.0*([0-9]+)\.0*([0-9]+)$/\1.\2.\3.\4/' >> "$IP_BLACKLIST_TMP_FILE"
-    command grep -Po "^$IPV6_REGEX" "$IP_TMP_FILE" >> "$IP6_BLACKLIST_TMP_FILE"
+    command grep -Pio "^$IPV6_REGEX" "$IP_TMP_FILE" >> "$IP6_BLACKLIST_TMP_FILE"
     [[ ${VERBOSE:-yes} == yes ]] && echo -n "."
   elif (( HTTP_RC == 503 )); then
-    echo -e "\\nUnavailable (${HTTP_RC}): $i"
+    echo -e "\\nUnavailable (${HTTP_RC}): $url"
   else
-    echo >&2 -e "\\nWarning: curl returned HTTP response code $HTTP_RC for URL $i"
+    echo >&2 -e "\\nWarning: curl returned HTTP response code $HTTP_RC for URL $url"
   fi
   rm -f "$IP_TMP_FILE"
 done
 
 # sort -nu does not work as expected
-sed -r -e '/^(0\.0\.0\.0|10\.|127\.|172\.1[6-9]\.|172\.2[0-9]\.|172\.3[0-1]\.|192\.168\.|22[4-9]\.|23[0-9]\.)/d' "$IP_BLACKLIST_TMP_FILE"|sort -n|sort -mu >| "$IP_BLACKLIST_FILE"
+sed -r -e '/^(0\.0\.0\.0|10\.|127\.|172\.1[6-9]\.|172\.2[0-9]\.|172\.3[0-1]\.|192\.168\.|22[4-9]\.|23[0-9]\.)/d' "$IP_BLACKLIST_TMP_FILE" | sort -n | sort -mu >| "$IP_BLACKLIST_FILE"
 cp "$IP6_BLACKLIST_TMP_FILE" "$IP6_BLACKLIST_FILE"
 if [[ ${DO_OPTIMIZE_CIDR} == yes ]]; then
   if [[ ${VERBOSE:-no} == yes ]]; then
@@ -121,7 +121,7 @@ fi
 if [ -s "$IP6_BLACKLIST_FILE" ]; then
   cat >> "$RULESET_FILE" <<EOF
 add element inet $TABLE $SET_NAME_V6 {
-$(sed -rn -e '/^[#$;]/d' -e "s/^(([0-9a-fA-F:.]+:+[0-9a-fA-F]*)+(\/[0-9]{1,3})?).*/  \\1,/p" "$IP6_BLACKLIST_FILE")
+$(sed -rn -e '/^[#$;]/d' -e "s/^(([0-9a-f:.]+:+[0-9a-f]*)+(\/[0-9]{1,3})?).*/  \\1,/ip" "$IP6_BLACKLIST_FILE")
 }
 EOF
 fi
@@ -129,8 +129,8 @@ fi
 if [[ ${VERBOSE:-no} == yes ]]; then
   echo -e "\\nApplying ruleset..."
 fi
-nft -f "$RULESET_FILE"
+nft -f "$RULESET_FILE" || exit 1
 
 if [[ ${VERBOSE:-no} == yes ]]; then
-  echo -e "\\nNumber of blacklisted IP/networks found: $(count_entries "$IP_BLACKLIST_FILE") IPv4, $(count_entries "$IP6_BLACKLIST_FILE") IPv6"
+  echo -e "\\nBlacklisted IPs/networks: $(count_entries "$IP_BLACKLIST_FILE") IPv4, $(count_entries "$IP6_BLACKLIST_FILE") IPv6"
 fi

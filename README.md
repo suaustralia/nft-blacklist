@@ -18,8 +18,8 @@ A Bash shell script which uses nftables sets to ban a large number of IP address
 
 ## Quick start for Debian/Ubuntu based installations
 
-1. `wget -O /usr/local/sbin/update-blacklist.sh https://raw.githubusercontent.com/leshniak/nft-blacklist/master/update-blacklist.sh`
-2. `chmod +x /usr/local/sbin/update-blacklist.sh`
+1. `wget -O /usr/local/sbin/nft-blacklist.sh https://raw.githubusercontent.com/leshniak/nft-blacklist/master/nft-blacklist.sh`
+2. `chmod +x /usr/local/sbin/nft-blacklist.sh`
 3. `mkdir -p /etc/nft-blacklist && mkdir -p /var/cache/nft-blacklist ; wget -O /etc/nft-blacklist/nft-blacklist.conf https://raw.githubusercontent.com/leshniak/nft-blacklist/master/nft-blacklist.conf`
 4. Modify `nft-blacklist.conf` according to your needs. Per default, the blacklisted IP addresses will be saved to `/var/cache/nft-blacklist/blacklist.nft`
 5. `apt-get install nftables`
@@ -32,7 +32,7 @@ A Bash shell script which uses nftables sets to ban a large number of IP address
 to generate the `/etc/nft-blacklist/ip-blacklist.restore`:
 
 ```sh
-/usr/local/sbin/update-blacklist.sh /etc/nft-blacklist/nft-blacklist.conf
+/usr/local/sbin/nft-blacklist.sh /etc/nft-blacklist/nft-blacklist.conf
 ```
 
 ## nftables filter rule
@@ -46,12 +46,12 @@ Make sure to run this snippet in a firewall script or just insert it to `/etc/rc
 
 ## Cron job
 
-In order to auto-update the blacklist, copy the following code into `/etc/cron.d/update-blacklist`. Don't update the list too often or some blacklist providers will ban your IP address. Once a day should be OK though.
+In order to auto-update the blacklist, copy the following code into `/etc/cron.d/nft-blacklist-update`. Don't update the list too often or some blacklist providers will ban your IP address. Once a day should be OK though.
 
 ```sh
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 MAILTO=root
-33 23 * * *      root /usr/local/sbin/update-blacklist.sh /var/cache/nft-blacklist/nft-blacklist.conf
+33 23 * * *      root /usr/local/sbin/nft-blacklist.sh /var/cache/nft-blacklist/nft-blacklist.conf
 ```
 
 ## Check for dropped packets
