@@ -39,8 +39,8 @@ if ! source "$1"; then
   exit 1
 fi
 
-if ! exists curl && exists egrep && exists grep && exists nft && exists sed && exists sort && exists wc ; then
-  echo >&2 "Error: searching PATH fails to find executables among: curl egrep grep nft sed sort wc"
+if ! exists curl && exists egrep && exists grep && exists nft && exists sed && exists sort && exists wc && exists date ; then
+  echo >&2 "Error: searching PATH fails to find executables among: curl egrep grep nft sed sort wc date"
   exit 1
 fi
 
@@ -59,6 +59,7 @@ fi
 
 IP_BLACKLIST_TMP_FILE=$(mktemp)
 IP6_BLACKLIST_TMP_FILE=$(mktemp)
+[[ ${VERBOSE:-no} == yes ]] && echo "Downloading sources..."
 for url in "${BLACKLISTS[@]}"
 do
   IP_TMP_FILE=$(mktemp)
@@ -75,17 +76,15 @@ do
   rm -f "$IP_TMP_FILE"
 done
 
+[[ ${VERBOSE:-no} == yes ]] && echo -e "\\n"
+
 # sort -nu does not work as expected
 sed -r -e '/^(0\.0\.0\.0|10\.|127\.|172\.1[6-9]\.|172\.2[0-9]\.|172\.3[0-1]\.|192\.168\.|22[4-9]\.|23[0-9]\.)/d' "$IP_BLACKLIST_TMP_FILE" | sort -n | sort -mu >| "$IP_BLACKLIST_FILE"
 sed -r -e '/^([0:]+\/0|fe80:)/Id' "$IP6_BLACKLIST_TMP_FILE" | sort -d | sort -mu >| "$IP6_BLACKLIST_FILE"
 if [[ ${DO_OPTIMIZE_CIDR} == yes ]]; then
-  if [[ ${VERBOSE:-no} == yes ]]; then
-    echo -e "\\n\\nAddresses before CIDR optimization: $(count_entries "$IP_BLACKLIST_FILE") IPv4, $(count_entries "$IP6_BLACKLIST_FILE") IPv6"
-  fi
+  [[ ${VERBOSE:-no} == yes ]] && echo "Optimizing entries ($(count_entries "$IP_BLACKLIST_FILE") IPv4, $(count_entries "$IP6_BLACKLIST_FILE") IPv6)..."
   cidr-merger -o "$IP_BLACKLIST_TMP_FILE" -o "$IP6_BLACKLIST_TMP_FILE" "$IP_BLACKLIST_FILE" "$IP6_BLACKLIST_FILE"
-  if [[ ${VERBOSE:-no} == yes ]]; then
-    echo "Addresses after CIDR optimization: $(count_entries "$IP_BLACKLIST_TMP_FILE") IPv4, $(count_entries "$IP6_BLACKLIST_TMP_FILE") IPv6"
-  fi
+  [[ ${VERBOSE:-no} == yes ]] && echo -e "Reduced to $(count_entries "$IP_BLACKLIST_TMP_FILE") IPv4, $(count_entries "$IP6_BLACKLIST_TMP_FILE") IPv6\\n"
   cp "$IP_BLACKLIST_TMP_FILE" "$IP_BLACKLIST_FILE"
   cp "$IP6_BLACKLIST_TMP_FILE" "$IP6_BLACKLIST_FILE"
 fi
@@ -93,6 +92,13 @@ fi
 rm -f "$IP_BLACKLIST_TMP_FILE" "$IP6_BLACKLIST_TMP_FILE"
 
 cat >| "$RULESET_FILE" <<EOF
+#
+# Created by nft-blacklist (https://github.com/leshniak/nft-blacklist) at $(date -uIseconds)
+# Blacklisted entries: $(count_entries "$IP_BLACKLIST_FILE") IPv4, $(count_entries "$IP6_BLACKLIST_FILE") IPv6
+#
+# Based on:
+$(printf "#   - %s\n" "${BLACKLISTS[@]}")
+#
 add table inet $TABLE
 add counter inet $TABLE $SET_NAME_V4
 add counter inet $TABLE $SET_NAME_V6
@@ -126,11 +132,7 @@ $(sed -rn -e '/^[#$;]/d' -e "s/^(([0-9a-f:.]+:+[0-9a-f]*)+(\/[0-9]{1,3})?).*/  \
 EOF
 fi
 
-if [[ ${VERBOSE:-no} == yes ]]; then
-  echo -e "\\nApplying ruleset..."
-fi
+[[ ${VERBOSE:-no} == yes ]] && echo -e "Applying ruleset..."
 nft -f "$RULESET_FILE" || exit 1
 
-if [[ ${VERBOSE:-no} == yes ]]; then
-  echo -e "\\nBlacklisted IPs/networks: $(count_entries "$IP_BLACKLIST_FILE") IPv4, $(count_entries "$IP6_BLACKLIST_FILE") IPv6"
-fi
+[[ ${VERBOSE:-no} == yes ]] && echo "Done."
