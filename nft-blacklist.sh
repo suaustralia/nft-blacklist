@@ -77,13 +77,12 @@ done
 
 # sort -nu does not work as expected
 sed -r -e '/^(0\.0\.0\.0|10\.|127\.|172\.1[6-9]\.|172\.2[0-9]\.|172\.3[0-1]\.|192\.168\.|22[4-9]\.|23[0-9]\.)/d' "$IP_BLACKLIST_TMP_FILE" | sort -n | sort -mu >| "$IP_BLACKLIST_FILE"
-cp "$IP6_BLACKLIST_TMP_FILE" "$IP6_BLACKLIST_FILE"
+sed -r -e '/^([0:]+\/0|fe80:)/Id' "$IP6_BLACKLIST_TMP_FILE" | sort -d | sort -mu >| "$IP6_BLACKLIST_FILE"
 if [[ ${DO_OPTIMIZE_CIDR} == yes ]]; then
   if [[ ${VERBOSE:-no} == yes ]]; then
     echo -e "\\n\\nAddresses before CIDR optimization: $(count_entries "$IP_BLACKLIST_FILE") IPv4, $(count_entries "$IP6_BLACKLIST_FILE") IPv6"
   fi
-  cidr-merger "$IP_BLACKLIST_FILE" > "$IP_BLACKLIST_TMP_FILE" 2>/dev/null
-  cidr-merger "$IP6_BLACKLIST_FILE" > "$IP6_BLACKLIST_TMP_FILE" 2>/dev/null
+  cidr-merger -o "$IP_BLACKLIST_TMP_FILE" -o "$IP6_BLACKLIST_TMP_FILE" "$IP_BLACKLIST_FILE" "$IP6_BLACKLIST_FILE"
   if [[ ${VERBOSE:-no} == yes ]]; then
     echo "Addresses after CIDR optimization: $(count_entries "$IP_BLACKLIST_TMP_FILE") IPv4, $(count_entries "$IP6_BLACKLIST_TMP_FILE") IPv6"
   fi
@@ -103,6 +102,7 @@ add set inet $TABLE $SET_NAME_V6 { type ipv6_addr; size ${SET_SIZE:-65536}; flag
 flush set inet $TABLE $SET_NAME_V6
 add chain inet $TABLE input { type filter hook input priority filter - 1; policy accept; }
 flush chain inet $TABLE input
+add rule inet $TABLE input iif "lo" accept
 add rule inet $TABLE input meta pkttype { broadcast, multicast } accept
 $([ ! -z "$IP_WHITELIST" ] && echo "add rule inet $TABLE input ip saddr { $IP_WHITELIST } accept")
 $([ ! -z "$IP6_WHITELIST" ] && echo "add rule inet $TABLE input ip6 saddr { $IP6_WHITELIST } accept")
@@ -121,7 +121,7 @@ fi
 if [ -s "$IP6_BLACKLIST_FILE" ]; then
   cat >> "$RULESET_FILE" <<EOF
 add element inet $TABLE $SET_NAME_V6 {
-$(sed -rn -e '/^[#$;]/d' -e "s/^(([0-9a-f:.]+:+[0-9a-f]*)+(\/[0-9]{1,3})?).*/  \\1,/ip" "$IP6_BLACKLIST_FILE")
+$(sed -rn -e '/^[#$;]/d' -e "s/^(([0-9a-f:.]+:+[0-9a-f]*)+(\/[0-9]{1,3})?).*/  \\1,/Ip" "$IP6_BLACKLIST_FILE")
 }
 EOF
 fi
