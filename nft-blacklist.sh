@@ -116,7 +116,7 @@ add rule inet $TABLE input ip saddr @$SET_NAME_V4 counter name $SET_NAME_V4 drop
 add rule inet $TABLE input ip6 saddr @$SET_NAME_V6 counter name $SET_NAME_V6 drop
 EOF
 
-if [ -s "$IP_BLACKLIST_FILE" ]; then
+if [[ -s "$IP_BLACKLIST_FILE" ]]; then
   cat >> "$RULESET_FILE" <<EOF
 add element inet $TABLE $SET_NAME_V4 {
 $(sed -rn -e '/^[#$;]/d' -e "s/^([0-9./]+).*/  \\1,/p" "$IP_BLACKLIST_FILE")
@@ -124,7 +124,7 @@ $(sed -rn -e '/^[#$;]/d' -e "s/^([0-9./]+).*/  \\1,/p" "$IP_BLACKLIST_FILE")
 EOF
 fi
 
-if [ -s "$IP6_BLACKLIST_FILE" ]; then
+if [[ -s "$IP6_BLACKLIST_FILE" ]]; then
   cat >> "$RULESET_FILE" <<EOF
 add element inet $TABLE $SET_NAME_V6 {
 $(sed -rn -e '/^[#$;]/d' -e "s/^(([0-9a-f:.]+:+[0-9a-f]*)+(\/[0-9]{1,3})?).*/  \\1,/Ip" "$IP6_BLACKLIST_FILE")
