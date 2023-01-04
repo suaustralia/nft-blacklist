@@ -102,9 +102,9 @@ $(printf "#   - %s\n" "${BLACKLISTS[@]}")
 add table inet $TABLE
 add counter inet $TABLE $SET_NAME_V4
 add counter inet $TABLE $SET_NAME_V6
-add set inet $TABLE $SET_NAME_V4 { type ipv4_addr; size ${SET_SIZE:-65536}; flags interval; }
+add set inet $TABLE $SET_NAME_V4 { type ipv4_addr; flags interval; }
 flush set inet $TABLE $SET_NAME_V4
-add set inet $TABLE $SET_NAME_V6 { type ipv6_addr; size ${SET_SIZE:-65536}; flags interval; }
+add set inet $TABLE $SET_NAME_V6 { type ipv6_addr; flags interval; }
 flush set inet $TABLE $SET_NAME_V6
 add chain inet $TABLE input { type filter hook input priority filter - 1; policy accept; }
 flush chain inet $TABLE input
