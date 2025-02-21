@@ -1,7 +1,0 @@
-{
-  "Verbose": false,
-  "IgnoreDefaults": false,
-  "Disable": {
-    "MaxLineLength": true
-  }
-}
