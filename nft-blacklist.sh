@@ -8,6 +8,7 @@ CIDR_MERGER="cidr-merger" # can be "./cidr-merger-linux-amd64" or similar if you
 NFT="nft"  # can be "sudo /sbin/nft" or whatever to apply the ruleset
 SET_NAME_PREFIX=blacklist
 HOOK="input" # use "prerouting" if you need to drop packets before other prerouting rule chains
+CHAIN="input"
 SET_NAME_V4="${SET_NAME_PREFIX}_v4"
 SET_NAME_V6="${SET_NAME_PREFIX}_v6"
 IPV4_REGEX="(?:[0-9]{1,3}\.){3}[0-9]{1,3}(?:/[0-9]{1,2})?"
@@ -109,14 +110,14 @@ add set inet $TABLE $SET_NAME_V4 { type ipv4_addr; flags interval; }
 flush set inet $TABLE $SET_NAME_V4
 add set inet $TABLE $SET_NAME_V6 { type ipv6_addr; flags interval; }
 flush set inet $TABLE $SET_NAME_V6
-add chain inet $TABLE input { type filter hook $HOOK priority filter - 1; policy accept; }
-flush chain inet $TABLE input
-add rule inet $TABLE input iif "lo" accept
-add rule inet $TABLE input meta pkttype { broadcast, multicast } accept\
-$([[ ! -z "$IP_WHITELIST" ]] && echo -e "\\nadd rule inet $TABLE input ip saddr { $IP_WHITELIST } accept")\
-$([[ ! -z "$IP6_WHITELIST" ]] && echo -e "\\nadd rule inet $TABLE input ip6 saddr { $IP6_WHITELIST } accept")
-add rule inet $TABLE input ip saddr @$SET_NAME_V4 counter name $SET_NAME_V4 drop
-add rule inet $TABLE input ip6 saddr @$SET_NAME_V6 counter name $SET_NAME_V6 drop
+add chain inet $TABLE $CHAIN { type filter hook $HOOK priority filter - 1; policy accept; }
+flush chain inet $TABLE $CHAIN
+add rule inet $TABLE $CHAIN iif "lo" accept
+add rule inet $TABLE $CHAIN meta pkttype { broadcast, multicast } accept\
+$([[ ! -z "$IP_WHITELIST" ]] && echo -e "\\nadd rule inet $TABLE $CHAIN ip saddr { $IP_WHITELIST } accept")\
+$([[ ! -z "$IP6_WHITELIST" ]] && echo -e "\\nadd rule inet $TABLE $CHAIN ip6 saddr { $IP6_WHITELIST } accept")
+add rule inet $TABLE $CHAIN ip saddr @$SET_NAME_V4 counter name $SET_NAME_V4 drop
+add rule inet $TABLE $CHAIN ip6 saddr @$SET_NAME_V6 counter name $SET_NAME_V6 drop
 EOF
 
 if [[ -s "$IP_BLACKLIST_FILE" ]]; then
