@@ -137,8 +137,8 @@ add rule inet $TABLE $CHAIN iif "lo" accept
 add rule inet $TABLE $CHAIN meta pkttype { broadcast, multicast } accept\
 $([[ ! -z "$IP_WHITELIST" ]] && echo -e "\\nadd rule inet $TABLE $CHAIN ip saddr { $IP_WHITELIST } accept")\
 $([[ ! -z "$IP6_WHITELIST" ]] && echo -e "\\nadd rule inet $TABLE $CHAIN ip6 saddr { $IP6_WHITELIST } accept")
-add rule inet $TABLE $CHAIN ip saddr @$SET_NAME_V4 counter name $SET_NAME_V4 drop
-add rule inet $TABLE $CHAIN ip6 saddr @$SET_NAME_V6 counter name $SET_NAME_V6 drop
+add rule inet $TABLE $CHAIN ip saddr @$SET_NAME_V4 counter name $SET_NAME_V4 log prefix "[nft-blacklist] DROP: " drop
+add rule inet $TABLE $CHAIN ip6 saddr @$SET_NAME_V6 counter name $SET_NAME_V6 log prefix "[nft-blacklist] DROP: " drop
 EOF
 
 if [[ -s "$IP_BLACKLIST_FILE" ]]; then
